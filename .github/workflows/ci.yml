@@ -1,0 +1,52 @@
+name: Ecommerce Platform CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: Validate Microservices
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            api-gateway/package-lock.json
+            product-service/package-lock.json
+            inventory-service/package-lock.json
+            order-service/package-lock.json
+
+      - name: Install API Gateway dependencies
+        working-directory: api-gateway
+        run: npm ci
+
+      - name: Install Product Service dependencies
+        working-directory: product-service
+        run: npm ci
+
+      - name: Install Inventory Service dependencies
+        working-directory: inventory-service
+        run: npm install
+
+      - name: Install Order Service dependencies
+        working-directory: order-service
+        run: npm ci
+
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+
+      - name: Build Docker images
+        run: docker compose build
+
