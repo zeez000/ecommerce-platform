@@ -242,7 +242,10 @@ app.get("/orders/:id", async (req, res) => {
 async function startOrderService() {
     try {
         await retry(
-            () => mongoose.connect(process.env.MONGO_URI || "mongodb://mongodb:27017/ecommerce"),
+            () => mongoose.connect(process.env.MONGO_URI || "mongodb://mongodb:27017/ecommerce", {
+                serverSelectionTimeoutMS: 5000,
+                family: 4
+            }),
             "MongoDB connection"
         );
 
