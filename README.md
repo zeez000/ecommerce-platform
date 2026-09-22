@@ -1978,3 +1978,162 @@ Cloud Infrastructure
 ```
 
 That makes the project useful both as a learning environment and as a DevOps portfolio project.
+
+
+---
+
+# 48. Frontend
+
+The project now includes a live visual frontend in:
+
+```text
+frontend/
+```
+
+It is a dark neon / cyber-style interface built with plain HTML, CSS, JavaScript and NGINX.
+
+The frontend is not using fake mock data.
+
+It talks to the real backend through:
+
+```text
+Browser
+   |
+   v
+Frontend NGINX
+   |
+   | /api/*
+   v
+API Gateway
+   |
+   +--> Product Service
+   +--> Inventory Service
+   +--> Order Service
+```
+
+The UI includes:
+
+- live product cards
+- create-product controls
+- stock editing
+- order placement
+- live order-state transitions
+- service health cards
+- event-flow visualization
+- client-observed Kafka workflow feed
+- animated system architecture
+- neon particle background
+- magnetic hover effects
+- responsive mobile layout
+
+Run the full stack:
+
+```bash
+docker compose up --build -d
+```
+
+Then open:
+
+```text
+http://localhost:3005
+```
+
+The frontend container is:
+
+```text
+ecommerce-frontend
+```
+
+You can inspect it with:
+
+```bash
+docker compose logs -f frontend
+```
+
+The frontend also calls:
+
+```text
+/api/system/health
+```
+
+which the API Gateway aggregates from all application services.
+
+Expected UI flow:
+
+```text
+Create Product
+      |
+      v
+Frontend
+      |
+      v
+API Gateway
+      |
+      v
+Product Service
+      |
+      | product.created
+      v
+Kafka
+      |
+      v
+Inventory Service
+      |
+      v
+Frontend refreshes and shows stock
+```
+
+Then when you place an order:
+
+```text
+Frontend
+   |
+   v
+Order Service
+   |
+   | order.created
+   v
+Kafka
+   |
+   v
+Inventory Service
+   |
+   +--> inventory.reserved
+   |         |
+   |         v
+   |     Order confirmed
+   |
+   +--> inventory.rejected
+             |
+             v
+         Order rejected
+```
+
+The frontend polls the real Order Service and visually shows the transition from:
+
+```text
+pending
+   ↓
+confirmed
+```
+
+or:
+
+```text
+pending
+   ↓
+rejected
+```
+
+In Kubernetes, the Ingress routes:
+
+```text
+/      -> frontend
+/api   -> API Gateway
+```
+
+Development hostname:
+
+```text
+ecommerce.local
+```
