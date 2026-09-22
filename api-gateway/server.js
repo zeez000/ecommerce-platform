@@ -6,7 +6,6 @@ const PORT = process.env.PORT || 8080;
 
 app.use(express.json());
 
-// Health check route
 app.get("/health", (req, res) => {
     res.status(200).json({
         service: "api-gateway",
@@ -14,6 +13,18 @@ app.get("/health", (req, res) => {
         uptime: process.uptime(),
         timestamp: new Date().toISOString()
     });
+});
+
+app.get("/metrics", (req, res) => {
+    res.type("text/plain; version=0.0.4");
+    res.send([
+        "# HELP service_up Whether the service process is running.",
+        "# TYPE service_up gauge",
+        "service_up{service=\"api-gateway\"} 1",
+        "# HELP process_uptime_seconds Process uptime in seconds.",
+        "# TYPE process_uptime_seconds gauge",
+        `process_uptime_seconds{service="api-gateway"} ${process.uptime()}`
+    ].join("\n") + "\n");
 });
 
 app.use(
@@ -55,4 +66,3 @@ app.get("/", (req, res) => {
 app.listen(PORT, () => {
     console.log(`API Gateway running on port ${PORT}`);
 });
-
