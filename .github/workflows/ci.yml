@@ -4,14 +4,16 @@ on:
   push:
     branches:
       - main
+      - devops-completion
   pull_request:
     branches:
       - main
 
 jobs:
   validate:
-    name: Validate Microservices
+    name: Build and Smoke Test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -20,12 +22,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: |
             api-gateway/package-lock.json
             product-service/package-lock.json
-            inventory-service/package-lock.json
+            inventory-service/package.json
             order-service/package-lock.json
 
       - name: Install API Gateway dependencies
@@ -50,3 +52,32 @@ jobs:
       - name: Build Docker images
         run: docker compose build
 
+      - name: Start stack
+        run: docker compose up -d
+
+      - name: Wait for gateway
+        run: |
+          for i in {1..36}; do
+            if curl --fail --silent http://localhost:8080/health >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose ps
+          docker compose logs
+          exit 1
+
+      - name: End-to-end smoke test
+        run: bash scripts/smoke-test.sh
+
+      - name: Show container status
+        if: always()
+        run: docker compose ps
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Shut down stack
+        if: always()
+        run: docker compose down -v
