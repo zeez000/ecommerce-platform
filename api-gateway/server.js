@@ -4,8 +4,6 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-app.use(express.json());
-
 app.get("/health", (req, res) => {
     res.status(200).json({
         service: "api-gateway",

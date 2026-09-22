@@ -694,6 +694,20 @@ Start everything:
 docker compose up --build -d
 ```
 
+In a Codespace where service DNS resolves correctly but every container-to-container
+TCP connection times out, check for a stale `iptables-legacy` FORWARD policy. Docker
+may be using `iptables-nft` while old legacy rules still drop traffic on its new
+`br-*` bridge. Run the idempotent host repair before starting Compose, including
+after a Codespace restart:
+
+```bash
+bash scripts/fix-codespace-docker-network.sh
+docker compose up --build -d
+```
+
+The repair allows traffic between Docker user bridges through the stale legacy
+chain. It does not change MongoDB configuration or the Compose service addresses.
+
 Check status:
 
 ```bash

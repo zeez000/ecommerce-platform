@@ -176,10 +176,13 @@ async function startConsumer() {
     await retry(() => consumer.connect(), "Kafka consumer connection");
     await retry(() => producer.connect(), "Kafka producer connection");
 
-    await consumer.subscribe({
-        topics: ["product-events", "order-events"],
-        fromBeginning: false
-    });
+    await retry(
+        () => consumer.subscribe({
+            topics: ["product-events", "order-events"],
+            fromBeginning: false
+        }),
+        "Kafka topic subscription"
+    );
 
     await consumer.run({
         eachMessage: async ({ message }) => {

@@ -39,7 +39,7 @@ echo "Adding stock..."
 curl --fail --silent   -X PUT "${BASE_URL}/inventory/inventory/${product_id}"   -H "Content-Type: application/json"   -d '{"quantity":5}' >/dev/null
 
 echo "Creating order..."
-order_json="$(curl --fail --silent   -X POST "${BASE_URL}/orders/orders"   -H "Content-Type: application/json"   -d "{"productId":"${product_id}","quantity":2}")"
+order_json="$(curl --fail --silent -X POST "${BASE_URL}/orders/orders" -H "Content-Type: application/json" -d "{\"productId\":\"${product_id}\",\"quantity\":2}")"
 
 order_id="$(node -e 'const input = process.argv[1]; const obj = JSON.parse(input); process.stdout.write(obj._id);' "$order_json")"
 
@@ -79,4 +79,30 @@ if (!row || row.quantity !== 3) {
 }
 ' "$final_inventory" "$product_id"
 
-echo "Smoke test passed: product -> inventory -> order -> reservation -> confirmation"
+echo "Creating an insufficient-stock order..."
+rejected_order_json="$(curl --fail --silent -X POST "${BASE_URL}/orders/orders" -H "Content-Type: application/json" -d "{\"productId\":\"${product_id}\",\"quantity\":4}")"
+rejected_order_id="$(node -e 'process.stdout.write(JSON.parse(process.argv[1])._id)' "$rejected_order_json")"
+
+rejected="false"
+for i in {1..20}; do
+  current_order="$(curl --fail --silent "${BASE_URL}/orders/orders/${rejected_order_id}")"
+  if node -e 'process.exit(JSON.parse(process.argv[1]).status === "rejected" ? 0 : 1)' "$current_order"; then
+    rejected="true"
+    break
+  fi
+  sleep 2
+done
+
+if [[ "$rejected" != "true" ]]; then
+  echo "Insufficient-stock order did not reach rejected state"
+  exit 1
+fi
+
+final_inventory="$(curl --fail --silent "${BASE_URL}/inventory/inventory")"
+node -e 'const [json,id] = process.argv.slice(1); const row = JSON.parse(json).find(x => x.productId === id); if (!row || row.quantity !== 3) process.exit(1)' "$final_inventory" "$product_id"
+
+echo "Checking frontend and its API proxy on port 3005..."
+curl --fail --silent "http://localhost:3005/" | grep -q '<html'
+curl --fail --silent "http://localhost:3005/api/health" >/dev/null
+
+echo "Smoke test passed: product -> inventory -> stock -> confirmed order -> rejected order -> frontend"

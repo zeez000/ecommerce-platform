@@ -156,10 +156,13 @@ async function handleInventoryEvent(event) {
 async function startConsumer() {
     await retry(() => consumer.connect(), "Kafka consumer connection");
 
-    await consumer.subscribe({
-        topic: "inventory-events",
-        fromBeginning: false
-    });
+    await retry(
+        () => consumer.subscribe({
+            topic: "inventory-events",
+            fromBeginning: false
+        }),
+        "Kafka topic subscription"
+    );
 
     consumer.run({
         eachMessage: async ({ message }) => {
