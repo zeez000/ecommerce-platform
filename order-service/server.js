@@ -5,42 +5,37 @@ const { Kafka } = require("kafkajs");
 const app = express();
 const PORT = process.env.PORT || 3002;
 
+app.use(express.json());
+
 const kafka = new Kafka({
     clientId: "order-service",
     brokers: [process.env.KAFKA_BROKER || "kafka:9092"]
-    
 });
 
 const producer = kafka.producer();
-
 const consumer = kafka.consumer({
     groupId: "order-service-group"
 });
 
-app.use(express.json());
+async function retry(operation, label, attempts = 20, delayMs = 3000) {
+    let lastError;
 
-// Health check route
-app.get("/health", (req, res) => {
-    res.status(200).json({
-        service: "order-service",
-        status: "healthy",
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString()
-    });
-});
-/* MongoDB connection */
-mongoose
-    .connect(
-    process.env.MONGO_URI || "mongodb://mongodb:27017/ecommerce"
-)
-    .then(() => {
-        console.log("Order Service connected to MongoDB");
-    })
-    .catch((error) => {
-        console.error("MongoDB connection failed:", error);
-    });
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            console.error(`${label} attempt ${attempt}/${attempts} failed:`, error.message);
 
-/* Order schema */
+            if (attempt < attempts) {
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        }
+    }
+
+    throw lastError;
+}
+
 const orderSchema = new mongoose.Schema(
     {
         productId: {
@@ -69,11 +64,97 @@ const orderSchema = new mongoose.Schema(
 
 const Order = mongoose.model("Order", orderSchema);
 
-/* Kafka consumer */
-async function startConsumer() {
-    await consumer.connect();
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        service: "order-service",
+        status: "healthy",
+        mongoReady: mongoose.connection.readyState === 1,
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+    });
+});
 
-    console.log("Order Service consumer connected to Kafka");
+app.get("/metrics", (req, res) => {
+    res.type("text/plain; version=0.0.4");
+    res.send([
+        "# HELP service_up Whether the service process is running.",
+        "# TYPE service_up gauge",
+        "service_up{service=\"order-service\"} 1",
+        "# HELP process_uptime_seconds Process uptime in seconds.",
+        "# TYPE process_uptime_seconds gauge",
+        `process_uptime_seconds{service="order-service"} ${process.uptime()}`
+    ].join("\n") + "\n");
+});
+
+async function publishOrderEvent(order) {
+    await producer.send({
+        topic: "order-events",
+        messages: [
+            {
+                key: order.productId,
+                value: JSON.stringify({
+                    event: "order.created",
+                    orderId: order._id.toString(),
+                    productId: order.productId,
+                    quantity: order.quantity
+                })
+            }
+        ]
+    });
+}
+
+async function handleInventoryEvent(event) {
+    if (!event.orderId) {
+        console.warn("Ignoring inventory event without orderId:", event);
+        return;
+    }
+
+    if (event.event === "inventory.reserved") {
+        const updatedOrder = await Order.findOneAndUpdate(
+            {
+                _id: event.orderId,
+                status: "pending"
+            },
+            {
+                status: "confirmed",
+                rejectionReason: null
+            },
+            {
+                new: true
+            }
+        );
+
+        console.log(
+            "Order confirmed:",
+            updatedOrder?._id || "No matching pending order"
+        );
+    }
+
+    if (event.event === "inventory.rejected") {
+        const updatedOrder = await Order.findOneAndUpdate(
+            {
+                _id: event.orderId,
+                status: "pending"
+            },
+            {
+                status: "rejected",
+                rejectionReason: event.reason
+            },
+            {
+                new: true
+            }
+        );
+
+        console.log(
+            "Order rejected:",
+            updatedOrder?._id || "No matching pending order",
+            event.reason
+        );
+    }
+}
+
+async function startConsumer() {
+    await retry(() => consumer.connect(), "Kafka consumer connection");
 
     await consumer.subscribe({
         topic: "inventory-events",
@@ -84,50 +165,8 @@ async function startConsumer() {
         eachMessage: async ({ message }) => {
             try {
                 const event = JSON.parse(message.value.toString());
-
                 console.log("Order Service received event:", event);
-
-                if (event.event === "inventory.reserved") {
-                    const updatedOrder = await Order.findOneAndUpdate(
-                        {
-                            productId: event.productId,
-                            status: "pending"
-                        },
-                        {
-                            status: "confirmed"
-                        },
-                        {
-                            new: true
-                        }
-                    );
-
-                    console.log(
-                        "Order confirmed:",
-                        updatedOrder?._id || "No matching pending order"
-                    );
-                }
-
-                if (event.event === "inventory.rejected") {
-                    const updatedOrder = await Order.findOneAndUpdate(
-                        {
-                            productId: event.productId,
-                            status: "pending"
-                        },
-                        {
-                            status: "rejected",
-                            rejectionReason: event.reason
-                        },
-                        {
-                            new: true
-                        }
-                    );
-
-                    console.log(
-                        "Order rejected:",
-                        updatedOrder?._id || "No matching pending order",
-                        event.reason
-                    );
-                }
+                await handleInventoryEvent(event);
             } catch (error) {
                 console.error("Kafka event processing failed:", error);
             }
@@ -135,14 +174,13 @@ async function startConsumer() {
     });
 }
 
-/* Create order */
 app.post("/orders", async (req, res) => {
     try {
         const { productId, quantity } = req.body;
 
-        if (!productId || !quantity || quantity < 1) {
+        if (!productId || !Number.isInteger(quantity) || quantity < 1) {
             return res.status(400).json({
-                message: "productId and valid quantity are required"
+                message: "productId and a positive integer quantity are required"
             });
         }
 
@@ -152,23 +190,7 @@ app.post("/orders", async (req, res) => {
             status: "pending"
         });
 
-        await producer.send({
-            topic: "order-events",
-            messages: [
-                {
-                    key: productId,
-                    value: JSON.stringify({
-                        event: "order.created",
-                        orderId: order._id.toString(),
-                        productId,
-                        quantity
-                    })
-                }
-            ]
-        });
-
-        console.log("Order created:", order);
-        console.log("Order event published to Kafka");
+        await publishOrderEvent(order);
 
         res.status(201).json(order);
     } catch (error) {
@@ -180,7 +202,6 @@ app.post("/orders", async (req, res) => {
     }
 });
 
-/* Get all orders */
 app.get("/orders", async (req, res) => {
     try {
         const orders = await Order.find().sort({
@@ -197,7 +218,6 @@ app.get("/orders", async (req, res) => {
     }
 });
 
-/* Get one order */
 app.get("/orders/:id", async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
@@ -216,13 +236,14 @@ app.get("/orders/:id", async (req, res) => {
     }
 });
 
-/* Start service */
 async function startOrderService() {
     try {
-        await producer.connect();
+        await retry(
+            () => mongoose.connect(process.env.MONGO_URI || "mongodb://mongodb:27017/ecommerce"),
+            "MongoDB connection"
+        );
 
-        console.log("Order Service producer connected to Kafka");
-
+        await retry(() => producer.connect(), "Kafka producer connection");
         await startConsumer();
 
         app.listen(PORT, () => {
@@ -230,7 +251,23 @@ async function startOrderService() {
         });
     } catch (error) {
         console.error("Order Service startup failed:", error);
+        process.exit(1);
     }
 }
+
+async function shutdown() {
+    console.log("Shutting down Order Service");
+
+    await Promise.allSettled([
+        consumer.disconnect(),
+        producer.disconnect(),
+        mongoose.disconnect()
+    ]);
+
+    process.exit(0);
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
 
 startOrderService();
