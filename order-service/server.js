@@ -161,7 +161,7 @@ async function startConsumer() {
         fromBeginning: false
     });
 
-    await consumer.run({
+    consumer.run({
         eachMessage: async ({ message }) => {
             try {
                 const event = JSON.parse(message.value.toString());
@@ -171,6 +171,9 @@ async function startConsumer() {
                 console.error("Kafka event processing failed:", error);
             }
         }
+    }).catch((error) => {
+        console.error("Kafka consumer run loop failed:", error);
+        process.exit(1);
     });
 }
 
