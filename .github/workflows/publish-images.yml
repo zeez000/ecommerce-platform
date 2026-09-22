@@ -9,6 +9,7 @@ on:
       - "product-service/**"
       - "inventory-service/**"
       - "order-service/**"
+      - "frontend/**"
       - ".github/workflows/publish-images.yml"
   workflow_dispatch:
 
@@ -37,6 +38,9 @@ jobs:
           - name: order-service
             context: ./order-service
             image: ecommerce-order-service
+          - name: frontend
+            context: ./frontend
+            image: ecommerce-frontend
 
     steps:
       - name: Checkout repository
