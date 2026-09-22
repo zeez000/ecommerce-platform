@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#080812" />
+  <meta name="description" content="A live event-driven e-commerce microservices demo." />
+  <title>NEON//COMMERCE — Event-Driven Microservices</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <canvas id="particles" aria-hidden="true"></canvas>
+  <div class="noise" aria-hidden="true"></div>
+  <div class="cursor-glow" id="cursorGlow" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Neon Commerce home">
+      <span class="brand-mark">N//C</span>
+      <span class="brand-copy">
+        <strong>NEON COMMERCE</strong>
+        <small>event-driven systems lab</small>
+      </span>
+    </a>
+
+    <nav class="nav">
+      <a href="#store">Store</a>
+      <a href="#orders">Orders</a>
+      <a href="#systems">Systems</a>
+      <a href="#events">Event Flow</a>
+    </nav>
+
+    <div class="runtime-pill">
+      <span class="pulse-dot"></span>
+      <span id="runtimeText">connecting to stack</span>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">
+          <span>MICROSERVICES</span>
+          <span>KAFKA</span>
+          <span>KUBERNETES</span>
+          <span>OBSERVABILITY</span>
+        </div>
+
+        <h1>
+          E-COMMERCE,
+          <span class="gradient-text">WIRED LIKE A SYSTEM.</span>
+        </h1>
+
+        <p class="hero-sub">
+          A live storefront powered by real Product, Inventory and Order services.
+          Every action travels through the API Gateway, MongoDB, Redis and Kafka.
+        </p>
+
+        <div class="hero-actions">
+          <a class="btn btn-primary magnetic" href="#store">
+            <span>Enter Store</span>
+            <span class="btn-icon">↘</span>
+          </a>
+          <button class="btn btn-ghost magnetic" id="demoButton">
+            <span>Run Live Demo</span>
+            <span class="btn-icon">▶</span>
+          </button>
+        </div>
+
+        <div class="hero-stats">
+          <div class="stat">
+            <span class="stat-number" id="productCount">0</span>
+            <span class="stat-label">products</span>
+          </div>
+          <div class="stat">
+            <span class="stat-number" id="orderCount">0</span>
+            <span class="stat-label">orders</span>
+          </div>
+          <div class="stat">
+            <span class="stat-number" id="healthyCount">0/4</span>
+            <span class="stat-label">services healthy</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="orbit-shell">
+          <div class="orbital-ring ring-one"></div>
+          <div class="orbital-ring ring-two"></div>
+          <div class="orbital-ring ring-three"></div>
+
+          <div class="core">
+            <div class="core-haze"></div>
+            <div class="core-center">
+              <span>KAFKA</span>
+              <small>EVENT BUS</small>
+            </div>
+          </div>
+
+          <div class="node node-product">
+            <span class="node-led"></span>
+            <strong>PRODUCT</strong>
+            <small>:3000</small>
+          </div>
+
+          <div class="node node-inventory">
+            <span class="node-led"></span>
+            <strong>INVENTORY</strong>
+            <small>:3001</small>
+          </div>
+
+          <div class="node node-order">
+            <span class="node-led"></span>
+            <strong>ORDER</strong>
+            <small>:3002</small>
+          </div>
+
+          <div class="packet packet-a"></div>
+          <div class="packet packet-b"></div>
+          <div class="packet packet-c"></div>
+        </div>
+
+        <div class="hero-terminal glass">
+          <div class="terminal-bar">
+            <span></span><span></span><span></span>
+            <small>live-system.log</small>
+          </div>
+          <div class="terminal-lines" id="miniTerminal">
+            <p><i>›</i> booting distributed storefront...</p>
+            <p><i>›</i> waiting for service health...</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ticker" aria-label="Technology stack">
+      <div class="ticker-track">
+        <span>NODE.JS</span><b>✦</b>
+        <span>EXPRESS</span><b>✦</b>
+        <span>MONGODB</span><b>✦</b>
+        <span>REDIS</span><b>✦</b>
+        <span>APACHE KAFKA</span><b>✦</b>
+        <span>DOCKER</span><b>✦</b>
+        <span>GITHUB ACTIONS</span><b>✦</b>
+        <span>KUBERNETES</span><b>✦</b>
+        <span>PROMETHEUS</span><b>✦</b>
+        <span>GRAFANA</span><b>✦</b>
+        <span>NODE.JS</span><b>✦</b>
+        <span>EXPRESS</span><b>✦</b>
+        <span>MONGODB</span><b>✦</b>
+        <span>REDIS</span><b>✦</b>
+        <span>APACHE KAFKA</span><b>✦</b>
+        <span>DOCKER</span><b>✦</b>
+      </div>
+    </section>
+
+    <section class="section" id="store">
+      <div class="section-head">
+        <div>
+          <span class="kicker">01 / LIVE STOREFRONT</span>
+          <h2>Products from the real database.</h2>
+        </div>
+        <button class="icon-button magnetic" id="refreshButton" title="Refresh data">↻</button>
+      </div>
+
+      <div class="store-layout">
+        <aside class="control-panel glass">
+          <div class="panel-title">
+            <span>CONTROL DECK</span>
+            <span class="status-tag">ADMIN LAB</span>
+          </div>
+
+          <form id="createProductForm" class="control-form">
+            <label>
+              <span>Product name</span>
+              <input id="productName" autocomplete="off" placeholder="Quantum Keyboard" required />
+            </label>
+            <label>
+              <span>Price (₹)</span>
+              <input id="productPrice" type="number" min="0" step="1" placeholder="2499" required />
+            </label>
+            <label>
+              <span>Starting stock</span>
+              <input id="productStock" type="number" min="0" step="1" value="10" required />
+            </label>
+            <button class="btn btn-primary" type="submit">
+              Create Product + Stock
+            </button>
+          </form>
+
+          <div class="control-hint">
+            <span class="hint-icon">↯</span>
+            <p>
+              Creating a product publishes <code>product.created</code>.
+              Inventory is created asynchronously through Kafka.
+            </p>
+          </div>
+        </aside>
+
+        <div class="product-zone">
+          <div class="loading-state" id="productLoading">
+            <div class="loader-ring"></div>
+            <span>syncing product + inventory services</span>
+          </div>
+          <div class="product-grid" id="productGrid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-dark" id="orders">
+      <div class="section-head">
+        <div>
+          <span class="kicker">02 / ASYNC ORDER PIPELINE</span>
+          <h2>Watch orders change state.</h2>
+        </div>
+        <div class="legend">
+          <span><i class="status-dot pending"></i>pending</span>
+          <span><i class="status-dot confirmed"></i>confirmed</span>
+          <span><i class="status-dot rejected"></i>rejected</span>
+        </div>
+      </div>
+
+      <div class="orders-board glass">
+        <div class="orders-header">
+          <span>ORDER ID</span>
+          <span>PRODUCT</span>
+          <span>QTY</span>
+          <span>STATUS</span>
+          <span>EVENT RESULT</span>
+        </div>
+        <div id="ordersList" class="orders-list">
+          <div class="empty-row">No orders yet. Place one from a product card.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="systems">
+      <div class="section-head">
+        <div>
+          <span class="kicker">03 / SYSTEM HEALTH</span>
+          <h2>The storefront is only the surface.</h2>
+        </div>
+        <span class="last-sync" id="lastSync">not synced</span>
+      </div>
+
+      <div class="systems-grid">
+        <article class="system-card glass" data-service="api-gateway">
+          <div class="system-top"><span>API GATEWAY</span><i class="health-light"></i></div>
+          <strong>8080</strong>
+          <p>Single entry point and reverse proxy for client traffic.</p>
+          <div class="system-foot"><span>HTTP</span><span id="gatewayHealth">checking</span></div>
+        </article>
+
+        <article class="system-card glass" data-service="product-service">
+          <div class="system-top"><span>PRODUCT SERVICE</span><i class="health-light"></i></div>
+          <strong>3000</strong>
+          <p>CRUD, MongoDB persistence, Redis caching and product events.</p>
+          <div class="system-foot"><span>REST + KAFKA</span><span id="productHealth">checking</span></div>
+        </article>
+
+        <article class="system-card glass" data-service="inventory-service">
+          <div class="system-top"><span>INVENTORY SERVICE</span><i class="health-light"></i></div>
+          <strong>3001</strong>
+          <p>Consumes product/order events and performs atomic reservations.</p>
+          <div class="system-foot"><span>KAFKA CONSUMER</span><span id="inventoryHealth">checking</span></div>
+        </article>
+
+        <article class="system-card glass" data-service="order-service">
+          <div class="system-top"><span>ORDER SERVICE</span><i class="health-light"></i></div>
+          <strong>3002</strong>
+          <p>Creates orders and resolves async reservation outcomes by orderId.</p>
+          <div class="system-foot"><span>REST + KAFKA</span><span id="orderHealth">checking</span></div>
+        </article>
+      </div>
+
+      <div class="infra-ribbon glass">
+        <div>
+          <span class="infra-icon">◈</span>
+          <strong>MONGODB</strong>
+          <small>persistent state</small>
+        </div>
+        <div>
+          <span class="infra-icon">ϟ</span>
+          <strong>REDIS</strong>
+          <small>product cache</small>
+        </div>
+        <div>
+          <span class="infra-icon">⟠</span>
+          <strong>KAFKA</strong>
+          <small>event transport</small>
+        </div>
+        <div>
+          <span class="infra-icon">⬡</span>
+          <strong>DOCKER</strong>
+          <small>local runtime</small>
+        </div>
+        <div>
+          <span class="infra-icon">☸</span>
+          <strong>K8S</strong>
+          <small>orchestration</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-dark" id="events">
+      <div class="section-head">
+        <div>
+          <span class="kicker">04 / EVENT STREAM</span>
+          <h2>See the distributed workflow unfold.</h2>
+        </div>
+        <button class="text-button" id="clearEvents">clear feed</button>
+      </div>
+
+      <div class="event-layout">
+        <div class="flow-map glass">
+          <div class="flow-node product-flow">
+            <span>01</span>
+            <strong>Product</strong>
+            <small>product.created</small>
+          </div>
+          <div class="flow-line"><i></i><em>product-events</em></div>
+          <div class="flow-node inventory-flow">
+            <span>02</span>
+            <strong>Inventory</strong>
+            <small>reserve / reject</small>
+          </div>
+          <div class="flow-line"><i></i><em>inventory-events</em></div>
+          <div class="flow-node order-flow">
+            <span>03</span>
+            <strong>Order</strong>
+            <small>confirm / reject</small>
+          </div>
+        </div>
+
+        <div class="event-console glass">
+          <div class="console-top">
+            <span>CLIENT OBSERVED EVENT TRAIL</span>
+            <span class="live-badge"><i></i> LIVE</span>
+          </div>
+          <div class="event-feed" id="eventFeed">
+            <div class="event-entry muted">
+              <time>--:--:--</time>
+              <span class="event-type">SYSTEM</span>
+              <p>Waiting for your first action.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing">
+      <p>THIS ISN'T A MOCKUP.</p>
+      <h2>The UI is talking to the same microservices your CI and Kubernetes manifests deploy.</h2>
+      <a class="btn btn-primary magnetic" href="#store">Make something happen ↗</a>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="orderModal" aria-hidden="true">
+    <div class="modal glass" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+      <span class="kicker">PLACE ORDER</span>
+      <h3 id="modalTitle">Product</h3>
+      <p class="modal-price" id="modalPrice">₹0</p>
+
+      <label class="modal-field">
+        <span>Quantity</span>
+        <input id="orderQuantity" type="number" min="1" value="1" />
+      </label>
+
+      <div class="modal-stock">
+        <span>Available inventory</span>
+        <strong id="modalStock">0</strong>
+      </div>
+
+      <button class="btn btn-primary" id="submitOrder">Send through Kafka pipeline</button>
+      <p class="modal-note">The response starts as pending. Inventory Service decides the final result asynchronously.</p>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toastStack"></div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
