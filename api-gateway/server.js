@@ -15,6 +15,61 @@ app.get("/health", (req, res) => {
     });
 });
 
+app.get("/system/health", async (req, res) => {
+    const targets = {
+        "api-gateway": "http://localhost:8080/health",
+        "product-service": "http://product-service:3000/health",
+        "inventory-service": "http://inventory-service:3001/health",
+        "order-service": "http://order-service:3002/health"
+    };
+
+    const results = await Promise.all(
+        Object.entries(targets).map(async ([name, url]) => {
+            try {
+                const response = await fetch(url, {
+                    signal: AbortSignal.timeout(2500)
+                });
+
+                if (!response.ok) {
+                    throw new Error("Health check failed");
+                }
+
+                const data = await response.json();
+
+                return [
+                    name,
+                    {
+                        status: data.status || "healthy",
+                        uptime: data.uptime ?? null,
+                        timestamp: data.timestamp ?? null
+                    }
+                ];
+            } catch (error) {
+                return [
+                    name,
+                    {
+                        status: "offline",
+                        error: error.message
+                    }
+                ];
+            }
+        })
+    );
+
+    const services = Object.fromEntries(results);
+    const healthy = Object.values(services).filter(
+        (service) => service.status === "healthy"
+    ).length;
+
+    res.status(200).json({
+        status: healthy === Object.keys(services).length ? "healthy" : "degraded",
+        healthy,
+        total: Object.keys(services).length,
+        services,
+        timestamp: new Date().toISOString()
+    });
+});
+
 app.get("/metrics", (req, res) => {
     res.type("text/plain; version=0.0.4");
     res.send([
@@ -58,7 +113,8 @@ app.get("/", (req, res) => {
         routes: {
             products: "/products",
             inventory: "/inventory",
-            orders: "/orders"
+            orders: "/orders",
+            systemHealth: "/system/health"
         }
     });
 });
