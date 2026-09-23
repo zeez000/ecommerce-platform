@@ -102,7 +102,11 @@ final_inventory="$(curl --fail --silent "${BASE_URL}/inventory/inventory")"
 node -e 'const [json,id] = process.argv.slice(1); const row = JSON.parse(json).find(x => x.productId === id); if (!row || row.quantity !== 3) process.exit(1)' "$final_inventory" "$product_id"
 
 echo "Checking frontend and its API proxy on port 3005..."
-curl --fail --silent "http://localhost:3005/" | grep -q '<html'
+frontend_html="$(curl --fail --silent "http://localhost:3005/")"
+if [[ "$frontend_html" != *'<html'* ]]; then
+  echo "Frontend did not return an HTML document"
+  exit 1
+fi
 curl --fail --silent "http://localhost:3005/api/health" >/dev/null
 
 echo "Smoke test passed: product -> inventory -> stock -> confirmed order -> rejected order -> frontend"
