@@ -3,18 +3,25 @@ const state = {
   inventory: [],
   orders: [],
   health: {},
+  healthLoaded: false,
+  dataLoaded: false,
   selectedProduct: null,
-  pollTimer: null
+  selectedStockProduct: null,
+  orderStatuses: new Map(),
+  productSignature: "",
+  orderSignature: "",
+  eventCount: 0,
+  polling: false,
 };
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
-
 const els = {
   productGrid: $("#productGrid"),
   productLoading: $("#productLoading"),
   ordersList: $("#ordersList"),
   eventFeed: $("#eventFeed"),
+  eventCount: $("#eventCount"),
   productCount: $("#productCount"),
   orderCount: $("#orderCount"),
   healthyCount: $("#healthyCount"),
@@ -26,108 +33,74 @@ const els = {
   modalPrice: $("#modalPrice"),
   modalStock: $("#modalStock"),
   orderQuantity: $("#orderQuantity"),
+  stockModal: $("#stockModal"),
+  stockModalTitle: $("#stockModalTitle"),
+  stockQuantity: $("#stockQuantity"),
   toastStack: $("#toastStack"),
-  miniTerminal: $("#miniTerminal")
 };
 
 function formatMoney(value) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0
+    maximumFractionDigits: 0,
   }).format(Number(value || 0));
 }
 
 function shortId(id = "") {
-  if (!id) return "—";
-  return id.length > 11 ? id.slice(0, 5) + "…" + id.slice(-4) : id;
+  return id.length > 12 ? `${id.slice(0, 5)}…${id.slice(-4)}` : id;
 }
 
 function nowTime() {
-  return new Date().toLocaleTimeString([], {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
+  return new Date().toLocaleTimeString([], { hour12: false });
 }
 
 function escapeHtml(value = "") {
-  const div = document.createElement("div");
-  div.textContent = String(value);
-  return div.innerHTML;
+  const node = document.createElement("div");
+  node.textContent = String(value);
+  return node.innerHTML;
 }
 
 async function api(path, options = {}) {
   const response = await fetch("/api" + path, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    ...options
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    signal: options.signal || AbortSignal.timeout(25000),
   });
-
   const text = await response.text();
-  let data = null;
-
+  let data;
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
     data = text;
   }
-
-  if (!response.ok) {
-    throw new Error(data?.message || "Request failed with status " + response.status);
-  }
-
+  if (!response.ok)
+    throw new Error(data?.message || `Request failed (${response.status})`);
   return data;
 }
 
 function toast(title, message, type = "") {
   const node = document.createElement("div");
-  node.className = "toast " + type;
-  node.innerHTML = `
-    <div></div>
-    <div>
-      <strong>${escapeHtml(title)}</strong>
-      <p>${escapeHtml(message)}</p>
-    </div>
-  `;
-
+  node.className = `toast ${type}`;
+  node.innerHTML = `<div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(message)}</p></div>`;
   els.toastStack.appendChild(node);
-
   setTimeout(() => {
     node.style.opacity = "0";
-    node.style.transform = "translateY(8px)";
-  }, 3600);
-
-  setTimeout(() => node.remove(), 4000);
+    node.style.transform = "translateY(10px)";
+  }, 4800);
+  setTimeout(() => node.remove(), 5200);
 }
 
 function eventLog(type, message, level = "") {
-  const firstMuted = els.eventFeed.querySelector(".muted");
-  if (firstMuted) firstMuted.remove();
-
+  els.eventFeed.querySelector(".muted")?.remove();
   const node = document.createElement("div");
-  node.className = "event-entry " + level;
-  node.innerHTML = `
-    <time>${nowTime()}</time>
-    <span class="event-type">${escapeHtml(type)}</span>
-    <p>${escapeHtml(message)}</p>
-  `;
+  node.className = `event-entry ${level}`;
+  node.innerHTML = `<time>${nowTime()}</time><span class="event-type">${escapeHtml(type)}</span><p>${escapeHtml(message)}</p>`;
   els.eventFeed.prepend(node);
-
-  while (els.eventFeed.children.length > 40) {
+  while (els.eventFeed.children.length > 30)
     els.eventFeed.lastElementChild.remove();
-  }
-
-  const terminalLine = document.createElement("p");
-  terminalLine.innerHTML = `<i>›</i> ${escapeHtml(message)}`;
-  els.miniTerminal.appendChild(terminalLine);
-
-  while (els.miniTerminal.children.length > 4) {
-    els.miniTerminal.firstElementChild.remove();
-  }
+  state.eventCount += 1;
+  els.eventCount.textContent = `${String(state.eventCount).padStart(2, "0")} ENTRIES`;
 }
 
 function inventoryFor(productId) {
@@ -136,499 +109,513 @@ function inventoryFor(productId) {
 
 function renderProducts() {
   els.productLoading.style.display = "none";
-  els.productGrid.innerHTML = "";
-
   if (!state.products.length) {
-    els.productGrid.innerHTML = `
-      <div class="empty-card">
-        <div>
-          <strong>No products yet.</strong>
-          <p>Create your first one from the Control Deck.</p>
-        </div>
-      </div>
-    `;
+    els.productGrid.innerHTML = `<div class="empty-card"><span class="empty-symbol">∅</span><strong>The collection begins here.</strong><p>Introduce the first product. Its inventory will appear as the event moves through Kafka.</p><a href="#createProductForm">Create the first object ↗</a></div>`;
     return;
   }
 
-  state.products.forEach((product, index) => {
-    const inventory = inventoryFor(product._id);
-    const stock = inventory?.quantity ?? 0;
-    const initials = String(product.name || "P")
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase();
-
-    const card = document.createElement("article");
-    card.className = "product-card";
-    card.innerHTML = `
-      <span class="product-index">SKU // ${String(index + 1).padStart(2, "0")}</span>
-      <div class="product-art">
-        <div class="product-glyph"><span>${escapeHtml(initials)}</span></div>
-      </div>
-      <h3 class="product-name">${escapeHtml(product.name)}</h3>
-      <div class="product-meta">
-        <span class="product-price">${formatMoney(product.price)}</span>
-        <span class="stock-chip ${stock <= 0 ? "zero" : ""}">
-          STOCK ${stock}
-        </span>
-      </div>
-      <div class="product-actions">
-        <button class="btn btn-primary order-btn" data-id="${product._id}">Order now</button>
-        <button class="stock-edit" data-stock-id="${product._id}" title="Set stock">±</button>
-      </div>
-    `;
-
-    els.productGrid.appendChild(card);
-  });
-
-  $$(".order-btn").forEach((button) => {
-    button.addEventListener("click", () => openOrderModal(button.dataset.id));
-  });
-
-  $$(".stock-edit").forEach((button) => {
-    button.addEventListener("click", () => editStock(button.dataset.stockId));
-  });
+  els.productGrid.innerHTML = state.products
+    .map((product, index) => {
+      const inventory = inventoryFor(product._id);
+      const stock = inventory?.quantity;
+      const stockText =
+        stock == null
+          ? "SYNCING INVENTORY"
+          : stock === 0
+            ? "OUT OF STOCK"
+            : `${stock} IN STOCK`;
+      const stockClass =
+        stock == null || stock === 0 ? "zero" : stock <= 3 ? "low" : "";
+      const initials = String(product.name || "P")
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase();
+      return `<article class="product-card">
+      <div class="product-card-top"><span>OBJECT / ${String(index + 1).padStart(2, "0")}</span><i class="micro-dot"></i></div>
+      <div class="product-art" aria-hidden="true"><span class="art-initials">${escapeHtml(initials)}</span></div>
+      <h3>${escapeHtml(product.name)}</h3>
+      <div class="product-meta"><span class="product-price">${formatMoney(product.price)}</span><span class="stock-indicator ${stockClass}"><i></i>${stockText}</span></div>
+      <div class="product-actions"><button class="order-btn" data-id="${escapeHtml(product._id)}" type="button">Place order <span aria-hidden="true">↗</span></button><button class="stock-edit" data-stock-id="${escapeHtml(product._id)}" type="button" aria-label="Update stock for ${escapeHtml(product.name)}" ${inventory ? "" : "disabled"}>±</button></div>
+    </article>`;
+    })
+    .join("");
 }
 
-function renderOrders() {
-  els.ordersList.innerHTML = "";
-
+function renderOrders(changedIds = new Set()) {
   if (!state.orders.length) {
-    els.ordersList.innerHTML = '<div class="empty-row">No orders yet. Place one from a product card.</div>';
+    els.ordersList.innerHTML = `<div class="empty-order"><span class="empty-index">00 / NOTHING IN MOTION</span><strong>When an order is placed,<br />its journey appears here.</strong><a href="#store">Browse products ↗</a></div>`;
     return;
   }
-
-  const productMap = new Map(state.products.map((product) => [product._id, product.name]));
-
-  state.orders.forEach((order) => {
-    const row = document.createElement("div");
-    row.className = "order-row";
-
-    const reason = order.status === "confirmed"
-      ? "inventory.reserved"
-      : order.status === "rejected"
-        ? (order.rejectionReason || "inventory.rejected")
-        : "awaiting inventory event";
-
-    row.innerHTML = `
-      <span class="order-id">${shortId(order._id)}</span>
-      <span>${escapeHtml(productMap.get(order.productId) || shortId(order.productId))}</span>
-      <span>×${Number(order.quantity || 0)}</span>
-      <span class="order-status ${escapeHtml(order.status)}">${escapeHtml(order.status)}</span>
-      <span class="order-reason">${escapeHtml(reason)}</span>
-    `;
-
-    els.ordersList.appendChild(row);
-  });
-}
-
-function setServiceCard(service, healthy) {
-  const card = document.querySelector(`[data-service="${service}"]`);
-  if (!card) return;
-  card.classList.toggle("healthy", Boolean(healthy));
-  card.classList.toggle("unhealthy", !healthy);
+  const names = new Map(
+    state.products.map((product) => [product._id, product.name]),
+  );
+  els.ordersList.innerHTML = [...state.orders]
+    .reverse()
+    .map((order, index) => {
+      const status = ["pending", "confirmed", "rejected"].includes(order.status)
+        ? order.status
+        : "pending";
+      const result =
+        status === "confirmed"
+          ? "Inventory reserved"
+          : status === "rejected"
+            ? order.rejectionReason || "Insufficient stock"
+            : "Awaiting inventory event";
+      return `<article class="order-card ${changedIds.has(order._id) ? "new-state" : ""}">
+      <span class="order-number">${String(state.orders.length - index).padStart(2, "0")}</span>
+      <div class="order-name"><strong>${escapeHtml(names.get(order.productId) || `Product ${shortId(order.productId)}`)}</strong><small>Order ${escapeHtml(shortId(order._id))}</small></div>
+      <div class="order-details">${Number(order.quantity)} ${Number(order.quantity) === 1 ? "unit" : "units"}<small>${escapeHtml(result)}</small></div>
+      <span class="order-status ${status}"><i></i>${status}</span>
+    </article>`;
+    })
+    .join("");
 }
 
 function renderHealth() {
-  const services = ["api-gateway", "product-service", "inventory-service", "order-service"];
-  const healthy = services.filter((service) => state.health[service]?.status === "healthy").length;
-
-  els.healthyCount.textContent = healthy + "/4";
-
-  const config = [
-    ["api-gateway", "#gatewayHealth"],
-    ["product-service", "#productHealth"],
-    ["inventory-service", "#inventoryHealth"],
-    ["order-service", "#orderHealth"]
+  const services = [
+    "api-gateway",
+    "product-service",
+    "inventory-service",
+    "order-service",
   ];
-
-  config.forEach(([service, selector]) => {
-    const item = state.health[service];
-    const ok = item?.status === "healthy";
-    setServiceCard(service, ok);
-    $(selector).textContent = ok ? "healthy" : "offline";
-  });
-
-  els.runtimePill.classList.remove("online", "offline");
-
-  if (healthy === 4) {
-    els.runtimePill.classList.add("online");
-    els.runtimeText.textContent = "all services operational";
-  } else if (healthy === 0) {
-    els.runtimePill.classList.add("offline");
-    els.runtimeText.textContent = "backend unavailable";
-  } else {
-    els.runtimeText.textContent = healthy + "/4 services online";
+  const healthy = services.filter(
+    (service) => state.health[service]?.status === "healthy",
+  ).length;
+  els.healthyCount.textContent = `${healthy}/4`;
+  const ids = {
+    "api-gateway": "#gatewayHealth",
+    "product-service": "#productHealth",
+    "inventory-service": "#inventoryHealth",
+    "order-service": "#orderHealth",
+  };
+  for (const service of services) {
+    const ok = state.health[service]?.status === "healthy";
+    $$(`[data-service="${service}"]`).forEach((node) => {
+      node.classList.toggle("healthy", ok);
+      node.classList.toggle("unhealthy", state.healthLoaded && !ok);
+    });
+    const bar = $(`[data-bar="${service}"]`);
+    bar?.classList.toggle("healthy", ok);
+    $(ids[service]).textContent = state.healthLoaded
+      ? ok
+        ? "Operational"
+        : "Unavailable"
+      : "Checking";
   }
+  els.runtimePill.classList.toggle("online", healthy === 4);
+  els.runtimePill.classList.toggle(
+    "offline",
+    state.healthLoaded && healthy === 0,
+  );
+  els.runtimeText.textContent = !state.healthLoaded
+    ? "Connecting to system"
+    : healthy === 4
+      ? "All systems live"
+      : `${healthy}/4 services live`;
 }
 
 async function loadHealth() {
   try {
-    const data = await api("/system/health");
-    state.health = data.services || {};
-  } catch (error) {
+    const result = await api("/system/health");
+    state.health = result.services || {};
+  } catch {
     state.health = {};
   }
-
+  state.healthLoaded = true;
   renderHealth();
 }
 
 async function loadData({ silent = false } = {}) {
-  if (!silent) {
-    els.productLoading.style.display = "grid";
-  }
-
+  if (!silent && !state.dataLoaded) els.productLoading.style.display = "flex";
   try {
     const [products, inventory, orders] = await Promise.all([
       api("/products/products"),
       api("/inventory/inventory"),
-      api("/orders/orders")
+      api("/orders/orders"),
     ]);
-
     state.products = Array.isArray(products) ? products : [];
     state.inventory = Array.isArray(inventory) ? inventory : [];
     state.orders = Array.isArray(orders) ? orders : [];
-
-    els.productCount.textContent = state.products.length;
-    els.orderCount.textContent = state.orders.length;
-    els.lastSync.textContent = "synced " + nowTime();
-
-    renderProducts();
-    renderOrders();
-  } catch (error) {
-    if (!silent) {
-      els.productLoading.style.display = "none";
-      els.productGrid.innerHTML = `
-        <div class="empty-card">
-          <div>
-            <strong>Backend not reachable.</strong>
-            <p>Start Docker Compose, then refresh this page.</p>
-          </div>
-        </div>
-      `;
-      toast("Stack unavailable", error.message, "error");
+    const productSignature = JSON.stringify([state.products, state.inventory]);
+    const orderSignature = JSON.stringify(state.orders);
+    const changed = new Set();
+    for (const order of state.orders) {
+      const previous = state.orderStatuses.get(order._id);
+      if (previous && previous !== order.status) {
+        changed.add(order._id);
+        if (order.status === "confirmed")
+          eventLog(
+            "ORDER",
+            `${shortId(order._id)} confirmed; stock reserved`,
+            "success",
+          );
+        if (order.status === "rejected")
+          eventLog(
+            "ORDER",
+            `${shortId(order._id)} rejected; ${order.rejectionReason || "insufficient stock"}`,
+            "error",
+          );
+      }
+      state.orderStatuses.set(order._id, order.status);
     }
+    state.dataLoaded = true;
+    els.productCount.textContent = String(state.products.length).padStart(
+      2,
+      "0",
+    );
+    els.orderCount.textContent = String(state.orders.length).padStart(2, "0");
+    els.lastSync.textContent = `Updated ${nowTime()}`;
+    if (productSignature !== state.productSignature) renderProducts();
+    if (orderSignature !== state.orderSignature) renderOrders(changed);
+    state.productSignature = productSignature;
+    state.orderSignature = orderSignature;
+  } catch (error) {
+    if (!state.dataLoaded) {
+      els.productLoading.style.display = "none";
+      els.productGrid.innerHTML = `<div class="empty-card"><span class="empty-symbol">!</span><strong>The connection is quiet.</strong><p>We could not reach the live services. Check the stack and try again.</p><button id="retryData" type="button">Try again ↗</button></div>`;
+    }
+    if (!silent) toast("Could not sync data", error.message, "error");
   }
-
   await loadHealth();
 }
 
-async function waitForInventory(productId, attempts = 12) {
-  for (let i = 0; i < attempts; i += 1) {
-    const inventory = await api("/inventory/inventory");
-    const found = inventory.find((item) => item.productId === productId);
-
-    if (found) {
-      state.inventory = inventory;
-      return found;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 700));
+async function waitForInventory(productId) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const rows = await api("/inventory/inventory");
+    const found = rows.find((row) => row.productId === productId);
+    if (found) return found;
+    await new Promise((resolve) => setTimeout(resolve, 750));
   }
-
   return null;
 }
 
 async function createProduct(event) {
   event.preventDefault();
-
   const name = $("#productName").value.trim();
   const price = Number($("#productPrice").value);
   const stock = Number($("#productStock").value);
-
-  if (!name || !Number.isFinite(price) || price < 0 || !Number.isFinite(stock) || stock < 0) {
-    toast("Invalid product", "Check the name, price and stock values.", "error");
+  if (
+    !name ||
+    !Number.isFinite(price) ||
+    price < 0 ||
+    !Number.isInteger(stock) ||
+    stock < 0
+  ) {
+    toast(
+      "Check the details",
+      "Enter a name, valid price and whole-number stock.",
+      "error",
+    );
     return;
   }
-
-  const button = event.submitter;
+  const button = $("#createProductButton");
   button.disabled = true;
-  button.textContent = "Creating through Product Service...";
-
+  button.innerHTML = "Creating product…";
   try {
-    eventLog("HTTP", `POST product: ${name}`);
     const product = await api("/products/products", {
       method: "POST",
-      body: JSON.stringify({ name, price })
+      body: JSON.stringify({ name, price }),
     });
-
-    eventLog("KAFKA", `product.created published for ${product._id}`, "success");
-
+    eventLog("PRODUCT", `${name} saved; product.created published`, "success");
     const inventory = await waitForInventory(product._id);
-
-    if (!inventory) {
-      throw new Error("Inventory Service did not create the record in time");
-    }
-
-    eventLog("CONSUMER", "Inventory Service consumed product.created", "success");
-
-    await api("/inventory/inventory/" + product._id, {
+    if (!inventory)
+      throw new Error(
+        "Product saved, but inventory did not arrive yet. Refresh shortly.",
+      );
+    eventLog(
+      "KAFKA",
+      `Inventory opened for ${shortId(product._id)}`,
+      "success",
+    );
+    await api(`/inventory/inventory/${product._id}`, {
       method: "PUT",
-      body: JSON.stringify({ quantity: stock })
+      body: JSON.stringify({ quantity: stock }),
     });
-
-    eventLog("INVENTORY", `stock initialized to ${stock}`, "success");
-
-    $("#productName").value = "";
-    $("#productPrice").value = "";
-    $("#productStock").value = "10";
-
-    toast("Product online", name + " is now flowing through the stack.", "success");
+    eventLog("STOCK", `${name} set to ${stock} units`, "success");
+    $("#createProductForm").reset();
+    toast("Product is live", `${name} is now in the collection.`, "success");
     await loadData({ silent: true });
   } catch (error) {
     eventLog("ERROR", error.message, "error");
-    toast("Create failed", error.message, "error");
+    toast("Creation needs attention", error.message, "error");
+    await loadData({ silent: true });
   } finally {
     button.disabled = false;
-    button.textContent = "Create Product + Stock";
+    button.innerHTML = 'Create product <span aria-hidden="true">↗</span>';
   }
+}
+
+function openModal(modal) {
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  requestAnimationFrame(() => modal.querySelector("input")?.focus());
+}
+
+function closeModal(modal) {
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
 }
 
 function openOrderModal(productId) {
   const product = state.products.find((item) => item._id === productId);
   if (!product) return;
-
-  const stock = inventoryFor(productId)?.quantity ?? 0;
   state.selectedProduct = product;
-
   els.modalTitle.textContent = product.name;
   els.modalPrice.textContent = formatMoney(product.price);
-  els.modalStock.textContent = stock;
+  els.modalStock.textContent = inventoryFor(productId)?.quantity ?? "Syncing";
   els.orderQuantity.value = "1";
-
-  els.orderModal.classList.add("open");
-  els.orderModal.setAttribute("aria-hidden", "false");
-  document.body.classList.add("modal-open");
+  openModal(els.orderModal);
 }
 
-function closeOrderModal() {
-  els.orderModal.classList.remove("open");
-  els.orderModal.setAttribute("aria-hidden", "true");
-  document.body.classList.remove("modal-open");
-  state.selectedProduct = null;
+function openStockModal(productId) {
+  const product = state.products.find((item) => item._id === productId);
+  const inventory = inventoryFor(productId);
+  if (!product || !inventory) return;
+  state.selectedStockProduct = product;
+  els.stockModalTitle.textContent = product.name;
+  els.stockQuantity.value = inventory.quantity;
+  openModal(els.stockModal);
 }
 
 async function submitOrder() {
   const product = state.selectedProduct;
   const quantity = Number(els.orderQuantity.value);
-
   if (!product || !Number.isInteger(quantity) || quantity < 1) {
-    toast("Invalid quantity", "Use a whole number of at least 1.", "error");
+    toast("Check the quantity", "Use a whole number of at least one.", "error");
     return;
   }
-
   const button = $("#submitOrder");
   button.disabled = true;
-  button.textContent = "Publishing order.created...";
-
+  button.innerHTML = "Placing order…";
   try {
-    eventLog("HTTP", `POST order ×${quantity} for ${product.name}`);
-
     const order = await api("/orders/orders", {
       method: "POST",
-      body: JSON.stringify({
-        productId: product._id,
-        quantity
-      })
+      body: JSON.stringify({ productId: product._id, quantity }),
     });
-
-    eventLog("KAFKA", `order.created → ${shortId(order._id)}`, "warning");
-    closeOrderModal();
-
-    toast("Order created", "Status is pending while Inventory Service processes the Kafka event.");
-
+    eventLog(
+      "ORDER",
+      `${shortId(order._id)} created for ${quantity} ${quantity === 1 ? "unit" : "units"}`,
+      "warning",
+    );
+    closeModal(els.orderModal);
+    toast("Order placed", "Inventory is resolving the request through Kafka.");
     await loadData({ silent: true });
-    await watchOrder(order._id, product.name);
+    watchOrder(order._id);
   } catch (error) {
     eventLog("ERROR", error.message, "error");
-    toast("Order failed", error.message, "error");
+    toast("Order could not be placed", error.message, "error");
   } finally {
     button.disabled = false;
-    button.textContent = "Send through Kafka pipeline";
+    button.innerHTML = "Place order <span>↗</span>";
   }
 }
 
-async function watchOrder(orderId, productName) {
-  for (let i = 0; i < 20; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 700));
-
+async function watchOrder(orderId) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
     try {
-      const order = await api("/orders/orders/" + orderId);
-
-      if (order.status === "confirmed") {
-        eventLog("INVENTORY", `inventory.reserved for ${shortId(orderId)}`, "success");
-        eventLog("ORDER", `${productName} order confirmed`, "success");
-        toast("Order confirmed", "Inventory reserved successfully.", "success");
+      const order = await api(`/orders/orders/${orderId}`);
+      if (order.status === "confirmed" || order.status === "rejected") {
         await loadData({ silent: true });
-        return;
-      }
-
-      if (order.status === "rejected") {
-        eventLog("INVENTORY", `inventory.rejected: ${order.rejectionReason || "rejected"}`, "error");
-        eventLog("ORDER", `${productName} order rejected`, "error");
-        toast("Order rejected", order.rejectionReason || "Inventory rejected the request.", "error");
-        await loadData({ silent: true });
+        toast(
+          order.status === "confirmed" ? "Order confirmed" : "Order rejected",
+          order.status === "confirmed"
+            ? "Inventory reserved the requested stock."
+            : order.rejectionReason || "Insufficient stock.",
+          order.status === "confirmed" ? "success" : "error",
+        );
         return;
       }
     } catch {
-      // keep polling; a transient fetch should not kill the visual demo
+      /* A transient read should not stop the status transition. */
     }
   }
-
-  eventLog("ORDER", `${shortId(orderId)} still pending after polling window`, "warning");
+  eventLog("ORDER", `${shortId(orderId)} is still pending`, "warning");
 }
 
-async function editStock(productId) {
-  const product = state.products.find((item) => item._id === productId);
-  const current = inventoryFor(productId)?.quantity ?? 0;
-  const value = window.prompt(
-    `Set stock for ${product?.name || "product"}:`,
-    String(current)
-  );
-
-  if (value === null) return;
-
-  const quantity = Number(value);
-
-  if (!Number.isFinite(quantity) || quantity < 0) {
-    toast("Invalid stock", "Stock must be zero or greater.", "error");
+async function saveStock() {
+  const product = state.selectedStockProduct;
+  const quantity = Number(els.stockQuantity.value);
+  if (
+    !product ||
+    els.stockQuantity.value.trim() === "" ||
+    !Number.isInteger(quantity) ||
+    quantity < 0
+  ) {
+    toast(
+      "Check the quantity",
+      "Stock must be a whole number of zero or more.",
+      "error",
+    );
     return;
   }
-
+  const button = $("#saveStock");
+  button.disabled = true;
+  button.innerHTML = "Updating inventory…";
   try {
-    await api("/inventory/inventory/" + productId, {
+    await api(`/inventory/inventory/${product._id}`, {
       method: "PUT",
-      body: JSON.stringify({ quantity })
+      body: JSON.stringify({ quantity }),
     });
-
-    eventLog("INVENTORY", `${product?.name || shortId(productId)} stock → ${quantity}`, "success");
-    toast("Stock updated", "Inventory Service published inventory.updated.", "success");
+    eventLog(
+      "STOCK",
+      `${product.name} updated to ${quantity} units`,
+      "success",
+    );
+    closeModal(els.stockModal);
+    toast(
+      "Stock updated",
+      `${product.name} now has ${quantity} units.`,
+      "success",
+    );
     await loadData({ silent: true });
   } catch (error) {
+    eventLog("ERROR", error.message, "error");
     toast("Stock update failed", error.message, "error");
+  } finally {
+    button.disabled = false;
+    button.innerHTML = "Update inventory <span>↗</span>";
   }
 }
 
-async function runLiveDemo() {
-  const stamp = String(Date.now()).slice(-5);
-  const demoName = "Neon Keyboard " + stamp;
-
-  $("#productName").value = demoName;
-  $("#productPrice").value = "3499";
-  $("#productStock").value = "8";
-  document.querySelector("#store").scrollIntoView({ behavior: "smooth" });
-
-  toast("Demo loaded", "Create the pre-filled product, then order it to watch the event stream.");
-  eventLog("DEMO", "Demo values loaded into Control Deck");
-}
-
-function clearEvents() {
-  els.eventFeed.innerHTML = `
-    <div class="event-entry muted">
-      <time>--:--:--</time>
-      <span class="event-type">SYSTEM</span>
-      <p>Event feed cleared.</p>
-    </div>
-  `;
-}
-
-function setupCursor() {
-  const glow = $("#cursorGlow");
-
-  window.addEventListener("pointermove", (event) => {
-    glow.style.left = event.clientX + "px";
-    glow.style.top = event.clientY + "px";
-  });
-
-  $$(".magnetic").forEach((element) => {
-    element.addEventListener("pointermove", (event) => {
-      const rect = element.getBoundingClientRect();
-      const x = event.clientX - rect.left - rect.width / 2;
-      const y = event.clientY - rect.top - rect.height / 2;
-      element.style.transform = `translate(${x * 0.04}px, ${y * 0.06}px)`;
-    });
-
-    element.addEventListener("pointerleave", () => {
-      element.style.transform = "";
-    });
-  });
-}
-
-function setupParticles() {
-  const canvas = $("#particles");
-  const ctx = canvas.getContext("2d");
-  const dots = [];
-
-  function resize() {
-    canvas.width = window.innerWidth * devicePixelRatio;
-    canvas.height = window.innerHeight * devicePixelRatio;
-    canvas.style.width = window.innerWidth + "px";
-    canvas.style.height = window.innerHeight + "px";
-    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-
-    dots.length = 0;
-    const count = Math.min(70, Math.floor(window.innerWidth / 20));
-
-    for (let i = 0; i < count; i += 1) {
-      dots.push({
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * window.innerHeight,
-        r: Math.random() * 1.2 + .25,
-        v: Math.random() * .16 + .04,
-        a: Math.random() * .5 + .1
+function setupMotion() {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const revealObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries)
+        if (entry.isIntersecting) {
+          entry.target.classList.add("in-view");
+          revealObserver.unobserve(entry.target);
+        }
+    },
+    { threshold: 0.08 },
+  );
+  $$(".reveal").forEach((node) => revealObserver.observe(node));
+  const navObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries)
+        if (entry.isIntersecting) {
+          $$(".site-nav a").forEach((link) =>
+            link.classList.toggle(
+              "active",
+              link.hash === `#${entry.target.id}`,
+            ),
+          );
+        }
+    },
+    { rootMargin: "-30% 0px -60% 0px" },
+  );
+  $$("main section[id]").forEach((node) => navObserver.observe(node));
+  const progress = $("#scrollProgress");
+  let scrollQueued = false;
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (scrollQueued) return;
+      scrollQueued = true;
+      requestAnimationFrame(() => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        progress.style.width = `${max > 0 ? (window.scrollY / max) * 100 : 0}%`;
+        scrollQueued = false;
       });
-    }
-  }
-
-  function draw() {
-    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
-    for (const dot of dots) {
-      dot.y -= dot.v;
-
-      if (dot.y < -5) {
-        dot.y = window.innerHeight + 5;
-        dot.x = Math.random() * window.innerWidth;
-      }
-
-      ctx.beginPath();
-      ctx.fillStyle = `rgba(202,196,255,${dot.a})`;
-      ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    requestAnimationFrame(draw);
-  }
-
-  resize();
-  draw();
-  window.addEventListener("resize", resize);
-}
-
-function startPolling() {
-  clearInterval(state.pollTimer);
-  state.pollTimer = setInterval(() => loadData({ silent: true }), 6000);
+    },
+    { passive: true },
+  );
+  if (reduce || !window.matchMedia("(pointer: fine)").matches) return;
+  const halo = $("#cursorGlow");
+  let point = null;
+  let pointerQueued = false;
+  window.addEventListener(
+    "pointermove",
+    (event) => {
+      point = { x: event.clientX, y: event.clientY };
+      if (pointerQueued) return;
+      pointerQueued = true;
+      requestAnimationFrame(() => {
+        halo.style.left = `${point.x}px`;
+        halo.style.top = `${point.y}px`;
+        halo.classList.add("visible");
+        pointerQueued = false;
+      });
+    },
+    { passive: true },
+  );
+  document.addEventListener("pointerleave", () =>
+    halo.classList.remove("visible"),
+  );
+  $$(".magnetic").forEach((button) => {
+    button.addEventListener("pointermove", (event) => {
+      const rect = button.getBoundingClientRect();
+      button.style.transform = `translate(${(event.clientX - rect.left - rect.width / 2) * 0.06}px, ${(event.clientY - rect.top - rect.height / 2) * 0.06}px)`;
+    });
+    button.addEventListener("pointerleave", () => {
+      button.style.transform = "";
+    });
+  });
 }
 
 $("#createProductForm").addEventListener("submit", createProduct);
 $("#refreshButton").addEventListener("click", () => loadData());
-$("#demoButton").addEventListener("click", runLiveDemo);
-$("#modalClose").addEventListener("click", closeOrderModal);
+$("#clearEvents").addEventListener("click", () => {
+  els.eventFeed.innerHTML =
+    '<div class="event-entry muted"><time>--:--:--</time><span class="event-type">SYSTEM</span><p>Log cleared. Waiting for the next action.</p></div>';
+  state.eventCount = 0;
+  els.eventCount.textContent = "00 ENTRIES";
+});
+const menuButton = $("#menuButton");
+const mobileNav = $("#mobileNav");
+function closeMenu() {
+  mobileNav.classList.remove("open");
+  menuButton.setAttribute("aria-expanded", "false");
+  menuButton.setAttribute("aria-label", "Open navigation");
+}
+menuButton.addEventListener("click", () => {
+  const open = mobileNav.classList.toggle("open");
+  menuButton.setAttribute("aria-expanded", String(open));
+  menuButton.setAttribute(
+    "aria-label",
+    open ? "Close navigation" : "Open navigation",
+  );
+});
+mobileNav
+  .querySelectorAll("a")
+  .forEach((link) => link.addEventListener("click", closeMenu));
+$("#productGrid").addEventListener("click", (event) => {
+  const order = event.target.closest(".order-btn");
+  const stock = event.target.closest(".stock-edit");
+  if (order) openOrderModal(order.dataset.id);
+  if (stock) openStockModal(stock.dataset.stockId);
+  if (event.target.id === "retryData") loadData();
+});
+$("#modalClose").addEventListener("click", () => closeModal(els.orderModal));
+$("#stockModalClose").addEventListener("click", () =>
+  closeModal(els.stockModal),
+);
 $("#submitOrder").addEventListener("click", submitOrder);
-$("#clearEvents").addEventListener("click", clearEvents);
-
-els.orderModal.addEventListener("click", (event) => {
-  if (event.target === els.orderModal) closeOrderModal();
-});
-
+$("#saveStock").addEventListener("click", saveStock);
+[els.orderModal, els.stockModal].forEach((modal) =>
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) closeModal(modal);
+  }),
+);
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeOrderModal();
+  if (event.key === "Escape") {
+    [els.orderModal, els.stockModal].forEach(closeModal);
+    closeMenu();
+  }
 });
-
-setupCursor();
-setupParticles();
+setupMotion();
 loadData();
-startPolling();
-eventLog("SYSTEM", "Frontend booted; connecting through NGINX → API Gateway");
+setInterval(async () => {
+  if (state.polling || document.hidden) return;
+  state.polling = true;
+  try {
+    await loadData({ silent: true });
+  } finally {
+    state.polling = false;
+  }
+}, 6000);

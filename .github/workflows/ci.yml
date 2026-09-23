@@ -62,10 +62,14 @@ jobs:
       - name: Start stack
         run: docker compose up -d
 
-      - name: Wait for gateway
+      - name: Wait for healthy stack and frontend proxy
         run: |
-          for i in {1..36}; do
-            if curl --fail --silent http://localhost:8080/health >/dev/null; then
+          for i in {1..60}; do
+            healthy="$(docker inspect --format '{{.State.Health.Status}}' mongodb redis kafka product-service inventory-service order-service api-gateway ecommerce-frontend 2>/dev/null | grep -c '^healthy$' || true)"
+            if [[ "$healthy" -eq 8 ]] && \
+               curl --fail --silent --max-time 3 http://localhost:8080/health >/dev/null && \
+               curl --fail --silent --max-time 3 http://localhost:3005/ >/dev/null && \
+               curl --fail --silent --max-time 3 http://localhost:3005/api/health >/dev/null; then
               exit 0
             fi
             sleep 5
