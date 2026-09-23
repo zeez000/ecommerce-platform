@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#090a09" />
+    <meta
+      name="description"
+      content="A live commerce experience shaped by microservices, Kafka and real-time inventory."
+    />
+    <title>FORM / FLOW — Commerce in motion</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-grain" aria-hidden="true"></div>
+    <div class="cursor-halo" id="cursorGlow" aria-hidden="true"></div>
+    <div class="scroll-progress" id="scrollProgress" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <a class="wordmark" href="#top" aria-label="Form Flow, back to top">
+        <span class="wordmark-symbol">F<span>·</span>F</span>
+        <span class="wordmark-name"
+          >FORM / FLOW<small>COMMERCE SYSTEMS</small></span
+        >
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="#store">Collection</a>
+        <a href="#orders">Orders</a>
+        <a href="#systems">The system</a>
+        <a href="#events">Signals</a>
+      </nav>
+      <a
+        class="header-status runtime-pill"
+        href="#systems"
+        aria-label="View live system health"
+      >
+        <i class="live-dot"></i
+        ><span id="runtimeText">Connecting to system</span
+        ><span class="status-arrow">↗</span>
+      </a>
+      <button
+        class="menu-button"
+        id="menuButton"
+        type="button"
+        aria-label="Open navigation"
+        aria-expanded="false"
+        aria-controls="mobileNav"
+      >
+        <span></span><span></span>
+      </button>
+      <nav class="mobile-nav" id="mobileNav" aria-label="Mobile navigation">
+        <a href="#store"><span>01</span> Collection <b>↗</b></a>
+        <a href="#orders"><span>02</span> Orders <b>↗</b></a>
+        <a href="#systems"><span>03</span> The system <b>↗</b></a>
+        <a href="#events"><span>04</span> Signals <b>↗</b></a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="heroTitle">
+        <div class="hero-content">
+          <p class="overline">
+            <span class="overline-rule"></span> AN INTERACTIVE SYSTEM STUDY
+            <span class="overline-index">/ 001</span>
+          </p>
+          <h1 id="heroTitle">Commerce<br />in <em>motion.</em></h1>
+          <p class="hero-description">
+            A live storefront with a distributed heartbeat. Create a product,
+            move inventory, place an order — and watch the system respond.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-light magnetic" href="#store"
+              >Explore the collection <span aria-hidden="true">↗</span></a
+            >
+            <a class="button button-outline magnetic" href="#systems"
+              >See how it works <span aria-hidden="true">↘</span></a
+            >
+          </div>
+          <div class="hero-footnote">
+            <span>REAL SERVICES. REAL EVENTS.</span
+            ><span>SCROLL TO EXPLORE <b aria-hidden="true">↓</b></span>
+          </div>
+        </div>
+        <div
+          class="hero-art"
+          aria-label="Abstract visualization of connected commerce services"
+        >
+          <div class="art-corner art-corner-tl"></div>
+          <div class="art-corner art-corner-tr"></div>
+          <div class="art-corner art-corner-bl"></div>
+          <div class="art-corner art-corner-br"></div>
+          <div class="art-grid"></div>
+          <div class="art-orbit orbit-one"></div>
+          <div class="art-orbit orbit-two"></div>
+          <div class="art-column column-back"></div>
+          <div class="art-column column-front"></div>
+          <div class="art-disc disc-one"></div>
+          <div class="art-disc disc-two"></div>
+          <div class="art-center-mark">F/F</div>
+          <div class="art-label art-label-top">
+            <span class="micro-dot"></span> SYSTEM ACTIVE
+          </div>
+          <div class="art-label art-label-bottom">
+            COMMERCE ENGINE <span>01—04</span>
+          </div>
+          <div class="art-caption">
+            Every interaction moves through a network of independent services.
+          </div>
+        </div>
+      </section>
+
+      <div
+        class="capability-strip"
+        aria-label="Technology behind the experience"
+      >
+        <span>01 / MICROSERVICES</span><i></i><span>02 / KAFKA EVENTS</span
+        ><i></i><span>03 / LIVE INVENTORY</span><i></i
+        ><span>04 / OBSERVABILITY</span>
+      </div>
+
+      <section
+        class="section collection-section reveal"
+        id="store"
+        aria-labelledby="storeTitle"
+      >
+        <div class="section-intro">
+          <div>
+            <p class="eyebrow">01 / THE COLLECTION</p>
+            <h2 id="storeTitle">Objects in the <em>system.</em></h2>
+          </div>
+          <p>
+            Every item below is read from MongoDB through the Product Service.
+            Stock arrives independently through Kafka and Inventory Service.
+          </p>
+        </div>
+        <div class="collection-layout">
+          <aside class="composer">
+            <div class="composer-head">
+              <span class="composer-index">NEW / 001</span
+              ><span class="composer-cross" aria-hidden="true">✳</span>
+            </div>
+            <h3>Introduce<br />something new.</h3>
+            <p>
+              Add a product and starting stock. The system creates its inventory
+              record from a <code>product.created</code> event.
+            </p>
+            <form id="createProductForm" class="product-form">
+              <label for="productName"
+                >PRODUCT NAME<input
+                  id="productName"
+                  autocomplete="off"
+                  placeholder="e.g. Monolith Speaker"
+                  maxlength="100"
+                  required
+              /></label>
+              <div class="form-pair">
+                <label for="productPrice"
+                  >PRICE / ₹<input
+                    id="productPrice"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="2499"
+                    required
+                /></label>
+                <label for="productStock"
+                  >INITIAL STOCK<input
+                    id="productStock"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value="10"
+                    required
+                /></label>
+              </div>
+              <button
+                class="button button-accent"
+                id="createProductButton"
+                type="submit"
+              >
+                Create product <span aria-hidden="true">↗</span>
+              </button>
+            </form>
+            <div class="composer-foot">
+              <i class="micro-dot"></i><span>CONNECTED TO LIVE SERVICES</span>
+            </div>
+          </aside>
+          <div class="collection-content">
+            <div class="collection-toolbar">
+              <div>
+                <span class="toolbar-label">LIVE CATALOGUE</span
+                ><strong><span id="productCount">—</span> objects</strong>
+              </div>
+              <button
+                class="text-action"
+                id="refreshButton"
+                type="button"
+                aria-label="Refresh products and inventory"
+              >
+                Refresh data <span aria-hidden="true">↻</span>
+              </button>
+            </div>
+            <div class="loading-state" id="productLoading" role="status">
+              <span class="loading-mark"></span
+              ><span>Connecting to the collection…</span>
+            </div>
+            <div class="product-grid" id="productGrid" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="section order-section reveal"
+        id="orders"
+        aria-labelledby="ordersTitle"
+      >
+        <div class="section-intro">
+          <div>
+            <p class="eyebrow">02 / THE ORDER CYCLE</p>
+            <h2 id="ordersTitle">From intent<br />to <em>outcome.</em></h2>
+          </div>
+          <p>
+            An order begins as pending. Inventory reserves stock or declines it;
+            Kafka carries the answer back to the Order Service.
+          </p>
+        </div>
+        <div class="order-topline">
+          <span>ORDER ACTIVITY</span
+          ><span><span id="orderCount">—</span> TOTAL ORDERS</span>
+        </div>
+        <div class="orders-list" id="ordersList" aria-live="polite">
+          <div class="empty-order">
+            <span class="empty-index">00 / NOTHING IN MOTION</span
+            ><strong
+              >When an order is placed,<br />its journey appears here.</strong
+            ><a href="#store">Browse products ↗</a>
+          </div>
+        </div>
+        <div class="order-key">
+          <span><i class="state-dot pending"></i> Pending</span
+          ><span><i class="state-dot confirmed"></i> Confirmed</span
+          ><span><i class="state-dot rejected"></i> Rejected</span>
+        </div>
+      </section>
+
+      <section
+        class="section system-section reveal"
+        id="systems"
+        aria-labelledby="systemsTitle"
+      >
+        <div class="section-intro">
+          <div>
+            <p class="eyebrow">03 / UNDER THE SURFACE</p>
+            <h2 id="systemsTitle">
+              One experience.<br /><em>Many systems.</em>
+            </h2>
+          </div>
+          <p>
+            Services operate independently. A shared event stream connects their
+            decisions without hiding the boundaries between them.
+          </p>
+        </div>
+        <div class="system-stage">
+          <div
+            class="system-visual"
+            aria-label="Architecture: client to API Gateway, product, inventory and order services, with MongoDB, Redis and Kafka"
+          >
+            <div class="diagram-caption">
+              LIVE SERVICE TOPOLOGY <span>↗</span>
+            </div>
+            <div class="diagram-client">YOU <span>CLIENT</span></div>
+            <div class="diagram-connector vertical"></div>
+            <div class="diagram-gateway" data-service="api-gateway">
+              <i class="health-light"></i><span>API GATEWAY</span
+              ><small>single entry point</small>
+            </div>
+            <div class="diagram-trunk"></div>
+            <div class="diagram-services">
+              <div class="diagram-service" data-service="product-service">
+                <i class="health-light"></i><span>PRODUCT</span
+                ><small>catalogue + cache</small>
+              </div>
+              <div class="diagram-service" data-service="inventory-service">
+                <i class="health-light"></i><span>INVENTORY</span
+                ><small>atomic stock</small>
+              </div>
+              <div class="diagram-service" data-service="order-service">
+                <i class="health-light"></i><span>ORDER</span
+                ><small>state + outcome</small>
+              </div>
+            </div>
+            <div class="diagram-bus">
+              <span class="bus-line"></span>
+              <div>KAFKA <small>EVENT STREAM</small></div>
+              <span class="bus-line"></span>
+            </div>
+            <div class="diagram-dependencies">
+              <span>MongoDB <small>persistence</small></span
+              ><span>Redis <small>cache</small></span>
+            </div>
+          </div>
+          <div class="health-panel">
+            <div class="health-panel-head">
+              <span>LIVE STATUS</span><span id="lastSync">Awaiting sync</span>
+            </div>
+            <div class="health-total">
+              <strong id="healthyCount">—/4</strong
+              ><span>services responding</span>
+            </div>
+            <div class="health-bars" aria-hidden="true">
+              <i data-bar="api-gateway"></i><i data-bar="product-service"></i
+              ><i data-bar="inventory-service"></i
+              ><i data-bar="order-service"></i>
+            </div>
+            <div class="health-rows">
+              <div data-service="api-gateway">
+                <span><i class="health-light"></i> API Gateway</span
+                ><strong id="gatewayHealth">checking</strong>
+              </div>
+              <div data-service="product-service">
+                <span><i class="health-light"></i> Product Service</span
+                ><strong id="productHealth">checking</strong>
+              </div>
+              <div data-service="inventory-service">
+                <span><i class="health-light"></i> Inventory Service</span
+                ><strong id="inventoryHealth">checking</strong>
+              </div>
+              <div data-service="order-service">
+                <span><i class="health-light"></i> Order Service</span
+                ><strong id="orderHealth">checking</strong>
+              </div>
+            </div>
+            <p class="health-note">
+              Status is fetched from the live API Gateway every six seconds.
+            </p>
+          </div>
+        </div>
+        <div class="platform-layer">
+          <div>
+            <span>RUNTIME</span><strong>Docker</strong
+            ><small>containerized services</small>
+          </div>
+          <div>
+            <span>ORCHESTRATION</span><strong>Kubernetes</strong
+            ><small>deployment manifests</small>
+          </div>
+          <div>
+            <span>DELIVERY</span><strong>CI / CD</strong
+            ><small>automated verification</small>
+          </div>
+          <div>
+            <span>OBSERVABILITY</span><strong>Prometheus</strong
+            ><small>metrics and monitoring</small>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="section signal-section reveal"
+        id="events"
+        aria-labelledby="eventsTitle"
+      >
+        <div class="section-intro">
+          <div>
+            <p class="eyebrow">04 / SIGNAL PATH</p>
+            <h2 id="eventsTitle">
+              A quiet system.<br /><em>Always moving.</em>
+            </h2>
+          </div>
+          <p>
+            Follow what the browser observes as actions cross service
+            boundaries. The event trail records real requests and their results
+            in this session.
+          </p>
+        </div>
+        <div class="signal-grid">
+          <div class="flow-panel">
+            <div class="panel-eyebrow">
+              EVENT-DRIVEN EXCHANGE <span>↗</span>
+            </div>
+            <div class="flow-step">
+              <span>01</span>
+              <div>
+                <strong>Product created</strong
+                ><small>Product Service writes to MongoDB</small>
+              </div>
+              <b>product.created</b>
+            </div>
+            <div class="flow-link">
+              <i></i><span>Kafka / product-events</span>
+            </div>
+            <div class="flow-step">
+              <span>02</span>
+              <div>
+                <strong>Inventory opens</strong
+                ><small>Inventory Service consumes the event</small>
+              </div>
+              <b>stock ready</b>
+            </div>
+            <div class="flow-link">
+              <i></i><span>Kafka / order-events</span>
+            </div>
+            <div class="flow-step">
+              <span>03</span>
+              <div>
+                <strong>Order resolves</strong
+                ><small>Reservation or rejection returns</small>
+              </div>
+              <b>inventory-events</b>
+            </div>
+            <div class="flow-panel-foot">
+              ASYNC BY DESIGN <span>→</span> VISIBLE BY DEFAULT
+            </div>
+          </div>
+          <div class="event-panel">
+            <div class="event-panel-head">
+              <div><i class="micro-dot"></i> SESSION SIGNALS</div>
+              <button class="text-action" id="clearEvents" type="button">
+                Clear log <span>×</span>
+              </button>
+            </div>
+            <div class="event-feed" id="eventFeed" aria-live="polite">
+              <div class="event-entry muted">
+                <time>--:--:--</time><span class="event-type">SYSTEM</span>
+                <p>Waiting for your first action.</p>
+              </div>
+            </div>
+            <div class="event-panel-foot">
+              <span>OBSERVED IN THIS BROWSER</span
+              ><span id="eventCount">00 ENTRIES</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing-section reveal">
+        <span class="eyebrow">THE SYSTEM IS READY</span>
+        <h2>Make the next<br /><em>move.</em></h2>
+        <a class="button button-light magnetic" href="#store"
+          >Create something <span aria-hidden="true">↗</span></a
+        >
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <a class="wordmark" href="#top"
+        ><span class="wordmark-symbol">F<span>·</span>F</span
+        ><span class="wordmark-name"
+          >FORM / FLOW<small>COMMERCE SYSTEMS</small></span
+        ></a
+      ><span>A LIVE STUDY IN DISTRIBUTED COMMERCE</span
+      ><a href="#top">BACK TO TOP ↑</a>
+    </footer>
+
+    <div class="modal-backdrop" id="orderModal" aria-hidden="true">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modalTitle"
+      >
+        <button
+          class="modal-close"
+          id="modalClose"
+          aria-label="Close order dialog"
+        >
+          ×
+        </button>
+        <p class="eyebrow">PLACE AN ORDER / LIVE</p>
+        <h3 id="modalTitle">Product</h3>
+        <p class="modal-price" id="modalPrice">₹0</p>
+        <div class="modal-divider"></div>
+        <label for="orderQuantity"
+          >QUANTITY<input
+            id="orderQuantity"
+            type="number"
+            min="1"
+            step="1"
+            value="1"
+        /></label>
+        <div class="modal-stock">
+          <span>AVAILABLE STOCK</span><strong id="modalStock">0</strong>
+        </div>
+        <button class="button button-accent" id="submitOrder" type="button">
+          Place order <span>↗</span>
+        </button>
+        <p class="modal-note">
+          Your order starts pending. Inventory decides the result asynchronously
+          through Kafka.
+        </p>
+      </div>
+    </div>
+    <div class="modal-backdrop" id="stockModal" aria-hidden="true">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="stockModalTitle"
+      >
+        <button
+          class="modal-close"
+          id="stockModalClose"
+          aria-label="Close stock dialog"
+        >
+          ×
+        </button>
+        <p class="eyebrow">INVENTORY / LIVE</p>
+        <h3 id="stockModalTitle">Set stock</h3>
+        <p class="modal-note">
+          Update the available quantity for this product.
+        </p>
+        <div class="modal-divider"></div>
+        <label for="stockQuantity"
+          >NEW QUANTITY<input
+            id="stockQuantity"
+            type="number"
+            min="0"
+            step="1"
+            value="0" /></label
+        ><button class="button button-accent" id="saveStock" type="button">
+          Update inventory <span>↗</span>
+        </button>
+      </div>
+    </div>
+    <div
+      class="toast-stack"
+      id="toastStack"
+      role="status"
+      aria-live="polite"
+    ></div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

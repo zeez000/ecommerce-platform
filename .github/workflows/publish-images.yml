@@ -1,0 +1,66 @@
+name: Publish Container Images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "api-gateway/**"
+      - "product-service/**"
+      - "inventory-service/**"
+      - "order-service/**"
+      - "frontend/**"
+      - ".github/workflows/publish-images.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.name }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api-gateway
+            context: ./api-gateway
+            image: ecommerce-api-gateway
+          - name: product-service
+            context: ./product-service
+            image: ecommerce-product-service
+          - name: inventory-service
+            context: ./inventory-service
+            image: ecommerce-inventory-service
+          - name: order-service
+            context: ./order-service
+            image: ecommerce-order-service
+          - name: frontend
+            context: ./frontend
+            image: ecommerce-frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.sha }}

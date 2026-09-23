@@ -4,14 +4,20 @@ on:
   push:
     branches:
       - main
+      - devops-completion
   pull_request:
     branches:
       - main
 
+concurrency:
+  group: ecommerce-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
-    name: Validate Microservices
+    name: Build and Smoke Test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -20,12 +26,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: |
             api-gateway/package-lock.json
             product-service/package-lock.json
-            inventory-service/package-lock.json
+            inventory-service/package.json
             order-service/package-lock.json
 
       - name: Install API Gateway dependencies
@@ -47,6 +53,42 @@ jobs:
       - name: Validate Docker Compose
         run: docker compose config --quiet
 
+      - name: Validate monitoring Compose overlay
+        run: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml config --quiet
+
       - name: Build Docker images
         run: docker compose build
 
+      - name: Start stack
+        run: docker compose up -d
+
+      - name: Wait for healthy stack and frontend proxy
+        run: |
+          for i in {1..60}; do
+            healthy="$(docker inspect --format '{{.State.Health.Status}}' mongodb redis kafka product-service inventory-service order-service api-gateway ecommerce-frontend 2>/dev/null | grep -c '^healthy$' || true)"
+            if [[ "$healthy" -eq 8 ]] && \
+               curl --fail --silent --max-time 3 http://localhost:8080/health >/dev/null && \
+               curl --fail --silent --max-time 3 http://localhost:3005/ >/dev/null && \
+               curl --fail --silent --max-time 3 http://localhost:3005/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose ps
+          docker compose logs
+          exit 1
+
+      - name: End-to-end smoke test
+        run: bash scripts/smoke-test.sh
+
+      - name: Show container status
+        if: always()
+        run: docker compose ps
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Shut down stack
+        if: always()
+        run: docker compose down -v

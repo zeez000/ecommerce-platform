@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecommerce-config
+  namespace: ecommerce
+data:
+  KAFKA_BROKER: kafka:9092
+  MONGO_URI: mongodb://mongodb:27017/ecommerce
+  REDIS_URL: redis://redis:6379
+  CACHE_TTL_SECONDS: "60"
