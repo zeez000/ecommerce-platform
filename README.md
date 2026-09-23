@@ -1,5 +1,7 @@
 # Event-Driven E-Commerce Microservices Platform
 
+> 📘 **Project manual:** [Read the complete Project Guide & Technical Manual](docs/ECommerce_Project_Guide_Manual.md)
+
 A hands-on DevOps and distributed-systems project built with **Node.js, Express, MongoDB, Redis, Apache Kafka, Docker, GitHub Actions, Kubernetes, Prometheus, and Grafana**.
 
 This README is written as both:
